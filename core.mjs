@@ -14,6 +14,9 @@ import { BrowserLauncher, connectDedicatedBrowser } from './browser-launcher.mjs
 import { pauseExistingVideoPages } from './browser-pause.mjs';
 import { browserPageLabel, browserPageLock, findSharedPage, adoptSharedPreparePage } from './browser-pages.mjs';
 import { StoryboardFrameStore } from './video-storyboard.mjs';
+// 观察落盘：把当次观察页面上真实可见的公开评论追加进 idea-radar 的 observations.jsonl。
+// 默认关闭（没配 IDEA_RADAR_OBSERVATIONS_PATH 就什么都不做），只做新增写入，不碰观看/评论/人格逻辑。
+import { recordRadarObservation } from './observation-writer.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SHARED_CAPTURE_MODE = Symbol('shared-video-frame-capture');
@@ -1411,6 +1414,8 @@ export class BrowserController {
       }
       catch { result.personaWarning='本次画面未登记为兴趣证据，不能据此更新人格兴趣。'; }
     }
+    // idea-radar #12：把本次观察页面可见的公开评论追加落盘（只追加、只取正文，失败不阻断观看）
+    await recordRadarObservation({ page: this.page, video: sampledState.video, state: sampledState, onEvent: event => this.onEvent?.(event) });
     return result;
   }
   async captureAudio(seconds,signal) {
