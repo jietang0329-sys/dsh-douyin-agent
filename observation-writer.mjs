@@ -50,8 +50,10 @@ function readVisibleCommentTexts(maxComments, maxLength) {
     // 不可见的不算"页面可见"；嵌在另一条评论里的回复行也不算首层评论
     if (!visible(row) || row.parentElement?.closest('[data-e2e="comment-item"]')) continue;
 
-    // 只在"属于这一行"的内容块里取字，避免把按钮文案、时间、"展开回复"混进来
-    const contents = [...row.querySelectorAll('[data-e2e="comment-content"]')].filter(
+    // 只在"属于这一行"的内容块里取字，避免把按钮文案、时间、"展开回复"混进来。
+    // 选择器与上游 comment-browser.mjs 的 readCommentDom 保持一致：
+    // data-e2e 是稳定契约，后两个是抖音改版时可能顶上的混淆类名兜底。
+    const contents = [...row.querySelectorAll('[data-e2e="comment-content"],.comment-item-content,.FduGc_lz > .Sh1Da424')].filter(
       (element) => element.closest('[data-e2e="comment-item"]') === row,
     );
     if (contents.length !== 1) continue;
