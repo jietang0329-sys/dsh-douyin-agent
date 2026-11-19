@@ -25,10 +25,10 @@ export function observationSinkPath(env = process.env) {
 
 /**
  * 在页面里读"当前可见"的评论正文。
- * 这段函数会被 page.evaluate 拿去浏览器里跑，所以不能引用外面的变量。
- * 只读 [data-e2e="comment-item"] 下 comment-content 的纯文字，跳过隐藏行和回复二级行。
+ * 这段函数会被 page.evaluate 拿去浏览器里跑，所以必须自包含（不引用外面任何变量）；
+ * 又因为 Playwright 的 evaluate 只接受一个参数，这里的入参合成一个对象。
  */
-function readVisibleCommentTexts(maxComments, maxLength) {
+function readVisibleCommentTexts({ maxComments = MAX_COMMENTS, maxLength = MAX_TEXT_LENGTH } = {}) {
   const visible = (element) => {
     const rect = element.getBoundingClientRect();
     const style = getComputedStyle(element);
@@ -100,8 +100,8 @@ export async function recordRadarObservation({ page, video, state, now = new Dat
       return null;
     }
 
-    // 取字只在浏览器里做一次：函数是自包含的（不引用外部变量），参数由调用方显式传
-    const list = await page.evaluate(readVisibleCommentTexts, MAX_COMMENTS, MAX_TEXT_LENGTH);
+    // Playwright 的 evaluate 只接受一个参数，所以配置合成一个对象传进去
+    const list = await page.evaluate(readVisibleCommentTexts, { maxComments: MAX_COMMENTS, maxLength: MAX_TEXT_LENGTH });
     if (!Array.isArray(list) || list.length === 0) return null;
 
     appendObservation(sinkPath, {

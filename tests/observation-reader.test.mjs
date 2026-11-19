@@ -95,7 +95,7 @@ function pageOf(rows) {
   return { querySelectorAll: (selector) => (selector === '[data-e2e="comment-item"]' ? items : []) };
 }
 
-const readFrom = (page) => withFakeDom(page, () => readVisibleCommentTexts(MAX_COMMENTS, MAX_TEXT_LENGTH));
+const readFrom = (page) => withFakeDom(page, () => readVisibleCommentTexts({ maxComments: MAX_COMMENTS, maxLength: MAX_TEXT_LENGTH }));
 
 test('按页面顺序读出可见评论正文', () => {
   const page = pageOf([['有没有现成的工具能自动整理素材'], ['这个软件用不了，注册不了']]);
