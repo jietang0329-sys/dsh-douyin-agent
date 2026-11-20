@@ -136,6 +136,29 @@ async function scrollCommentsIntoView(page) {
     .catch(() => {});
 }
 
+/**
+ * 读视频页评论区顶部那条「大家还在搜」。
+ * 这是平台自己统计的"看过这条视频的人还在搜什么"，等于现成的需求词，
+ * 比我们拍脑袋编关键词准。读不到就返回空数组，不影响主流程。
+ */
+async function readSearchSuggest(page) {
+  return page
+    .evaluate(() => {
+      const out = new Set();
+      for (const el of document.querySelectorAll('span, div, button, a')) {
+        const text = (el.innerText || '').trim();
+        if (!text || text.length > 24) continue;
+        if (/大家还在搜|还在搜|相关搜索/.test(text)) {
+          out.add(text);
+          const next = (el.nextElementSibling?.innerText || '').trim();
+          if (next && next.length <= 18) out.add(next);
+        }
+      }
+      return [...out].slice(0, 8);
+    })
+    .catch(() => []);
+}
+
 /** 读标题与作者（作者在 user-info 文本里，形如「昵称粉丝27.1万获赞187.4万关注」） */
 async function readVideoMeta(page) {
   return page
@@ -265,6 +288,9 @@ try {
       }
       console.log(`  作品 ${videoId}｜${meta.author || '作者未知'}｜${texts.length} 条评论 → 已落盘`);
       for (const text of texts.slice(0, 3)) console.log(`     · ${text.slice(0, 60)}`);
+      // 顺手记下平台给的"大家还在搜"，作为下一轮搜索词候选
+      const suggest = await readSearchSuggest(page);
+      if (suggest.length) console.log(`     需求词候选：${suggest.join(' / ')}`);
       summary.push({ keyword, videoId, comments: texts.length, note: meta.author || '' });
     }
   }
