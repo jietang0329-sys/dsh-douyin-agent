@@ -25,6 +25,11 @@ const keywords = getAll('search');
 const sinkPath = getArg('sink');
 const maxVideos = Math.min(Number(getArg('max-videos', '2')), 5); // 单轮最多 5 个作品
 const loginWait = Number(getArg('login-wait', '40'));
+// 排序与时间筛选，跟抖音开放平台搜索接口同一套枚举：
+// sort_type：0 综合 / 1 最多点赞 / 2 最新；publish_time：0 不限 / 1 一天内 / 7 七天内 / 180 半年内
+// 不传就走网页默认（综合排序）。网页端是否完全跟随这两个参数未逐一验证，先留口子。
+const sortType = getArg('sort', '');
+const publishDays = getArg('publish', '');
 const profileDir = getArg('profile', 'C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe-edge-profile');
 
 // 风控用的两个本地文件（都在 data/ 下，data/ 已入库忽略，不进 Git）
@@ -195,7 +200,10 @@ try {
   let doneVideos = 0; // 单轮总作品数上限 5
 
   for (const keyword of keywords) {
-    const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`;
+    const query = new URLSearchParams({ type: 'video' });
+    if (sortType) query.set('sort_type', sortType);
+    if (publishDays) query.set('publish_time', publishDays);
+    const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?${query.toString()}`;
     console.log(`\n=== 搜索「${keyword}」 ===`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await sleep(page, 8_000); // 实测结果区要 8 秒左右才渲染出来，5 秒偏早
