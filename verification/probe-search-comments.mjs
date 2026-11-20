@@ -125,13 +125,13 @@ async function detectRisk(page) {
 
 const sleep = (page, ms) => page.waitForTimeout(ms);
 
-/** 把评论区滚进视口：详情页里评论行常在视频下方，不滚就全算"不可见" */
+/** 把评论区滚到"最后一条可见评论"的位置，让下一屏评论露出来（只滚，不点） */
 async function scrollCommentsIntoView(page) {
   await page
     .evaluate(() => {
-      const row = document.querySelector('[data-e2e="comment-item"]');
-      const list = document.querySelector('[data-e2e="comment-list"]');
-      (row ?? list)?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      const rows = [...document.querySelectorAll('[data-e2e="comment-item"]')];
+      const last = rows[rows.length - 1] ?? document.querySelector('[data-e2e="comment-list"]');
+      last?.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'instant' });
     })
     .catch(() => {});
 }
@@ -261,13 +261,22 @@ try {
       const videoRisk = await detectRisk(page);
       if (videoRisk) tripRisk(page, `打开作品 ${videoId} 时：${videoRisk}`);
 
-      // 评论是异步渲染的：滚一次读一次，最多试 5 轮
+      // 评论是异步加载的：滚一屏读一屏，累积去重，最多 20 条、最多滚 6 次。
+      // 以前只读到第一条就停，一个作品只能拿 2 条评论——评论区明明还有更多，
+      // 是我们自己没往下滚，别把它当成"这个作品评论少"。
+      const MAX_TEXTS = 20;
       let texts = [];
-      for (let round = 1; round <= 5 && texts.length === 0; round += 1) {
+      for (let round = 1; round <= 6 && texts.length < MAX_TEXTS; round += 1) {
         await scrollCommentsIntoView(page);
         await sleep(page, 1_200);
-        texts = await page.evaluate(readVisibleCommentTexts, { maxComments: 20, maxLength: 512 }).catch(() => []);
+        const batch = await page
+          .evaluate(readVisibleCommentTexts, { maxComments: MAX_TEXTS, maxLength: 512 })
+          .catch(() => []);
+        for (const text of batch) {
+          if (!texts.includes(text)) texts.push(text);
+        }
       }
+      texts = texts.slice(0, MAX_TEXTS);
 
       if (!texts.length) {
         console.log(`  作品 ${videoId}：没读到可见评论（评论区未展开/已收起）`);
