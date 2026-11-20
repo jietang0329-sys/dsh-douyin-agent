@@ -86,11 +86,26 @@ async function detectRisk(page) {
   const probe = await page
     .evaluate(() => {
       const text = (document.body?.innerText || '').slice(0, 2000);
-      const html = document.documentElement.innerHTML.slice(0, 200000);
+      // 只认"真的画在屏幕上"的验证框。
+      // 以前是拿整页 HTML 做正则，抖音页面本来就预加载验证组件资源，未登录也会命中，
+      // 2026-11-20 那次"登录阶段出现验证码/滑块"就是这么误报的。
+      const visibleVerifyBox = [...document.querySelectorAll(
+        '[class*="captcha" i], [id*="captcha" i], [class*="verify-container" i], [class*="verify-box" i], [class*="slider" i]',
+      )].some((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return (
+          rect.width > 40 &&
+          rect.height > 20 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity) > 0.1
+        );
+      });
       return {
         textLength: (document.body?.innerText || '').length,
         verifyWords: /请完成验证|安全验证|验证码|拖动滑块|滑块验证|人机验证|captcha/i.test(text),
-        hasCaptchaBox: /captcha|verify-container|slider/i.test(html),
+        hasCaptchaBox: visibleVerifyBox,
         loginWall: /登录后(查看|评论)|扫码登录|请先登录/.test(text),
         commentRows: document.querySelectorAll('[data-e2e="comment-item"]').length,
       };
@@ -152,7 +167,11 @@ async function collectVideoIds(page, limit) {
 const context = await chromium.launchPersistentContext(profileDir, {
   channel: 'msedge', // 用本机已装 Edge，不下内核
   headless: false,
-  args: ['--no-first-run', '--no-default-browser-check'],
+  // 2026-11-20 实测：默认启动带 --enable-automation，navigator.webdriver=true，
+  // 抖音搜索页会返回"空壳"（HTTP 200、只有导航和备案信息、搜索接口一个都不发）。
+  // 关掉这个默认参数 + 禁掉 AutomationControlled 特性后，搜索页正常出结果。
+  ignoreDefaultArgs: ['--enable-automation'],
+  args: ['--no-first-run', '--no-default-browser-check', '--disable-blink-features=AutomationControlled'],
 });
 const page = context.pages()[0] ?? (await context.newPage());
 
@@ -179,7 +198,7 @@ try {
     const searchUrl = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=video`;
     console.log(`\n=== 搜索「${keyword}」 ===`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await sleep(page, 5_000);
+    await sleep(page, 8_000); // 实测结果区要 8 秒左右才渲染出来，5 秒偏早
 
     // 页面刚打开就先查一次风控：这一步能拦住"搜索直接被挡"的情况
     const searchRisk = await detectRisk(page);
